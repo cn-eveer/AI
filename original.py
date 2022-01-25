@@ -413,7 +413,7 @@ class REVERSI:
         return True
 
     """ Display Board """
-    def display(self, iter: int) -> None:
+    def display(self, iter: int, report: str) -> None:
 
         if not DISPLAY:
             return
@@ -421,10 +421,11 @@ class REVERSI:
         os.system('clear')
 
         # Horizontal Axis
-        print("=== WINNING TOTAL ===")
+        print("=== WINNING TOTAL ===\n")
         print(
-            f"P1: {self.p1.wins}, P2: {self.p2.wins}, TIE: {iter - 1 - self.p1.wins-self.p2.wins}")
-        print("=====================")
+            f"P1: {self.p1.wins}, P2: {self.p2.wins}, TIE: {iter - 1 - self.p1.wins-self.p2.wins}\n")
+        print(report)
+        print("=====================\n")
 
         print("GAME No.:", iter)
         print('\n  a b c d e f g h')
@@ -522,15 +523,15 @@ class REVERSI:
     def start(self, iter: int=1) -> None:
 
         p1, p2 = 0, 0
+        report = ""
         for i in range(1, iter+1):
 
-            if i % 100 == 0:
-                print(
-                    f'{i}, P1: {self.p1.wins}({self.p1.wins-p1}), P2: {self.p2.wins}({self.p2.wins-p2}), TIE: {i-self.p1.wins-self.p2.wins}')
+            if i % iter%(iter/10) == 0:
+                report += f'At{i}, P1: {self.p1.wins}({self.p1.wins-p1}), P2: {self.p2.wins}({self.p2.wins-p2}), TIE: {i-1-self.p1.wins-self.p2.wins}\n'
                 p1, p2 = self.p1.wins, self.p2.wins
             while True:
 
-                self.display(i)
+                self.display(i,report)
 
                 if DISPLAY:
 
@@ -582,10 +583,10 @@ class REVERSI:
 
                 if self.check_game_over():
                     if DISPLAY:
-                        self.display(i)
+                        self.display(i,report)
                     break
 
-                time.sleep(0.05)
+                #time.sleep(0.05)
                 if SHOW_SLOW:
                     time.sleep(0.5)
 
@@ -620,7 +621,6 @@ class REVERSI:
                 self.players[BLACK].feedReward(1, diff)
                 self.players[WHITE].feedReward(1, diff)
 
-            # time.sleep(1)
             self.reset()
 
         self.p1.savePolicy()
@@ -645,10 +645,20 @@ def main():
         load=False
     )
 
-    player = HUMAN()
+    # TRAIN
     train = REVERSI(p1, p2)
     train.start(100000)
 
+    # TEST
+    random_player = AI(name="random")
+    test1 = REVERSI(p1, random_player)
+    test1.play(500)
+
+    test2 = REVERSI(p2, random_player)
+    test2.play(500)
+    
+    # PLAY
+    player = HUMAN()
     play = REVERSI(player,p2)
     #play.start(1)
 
