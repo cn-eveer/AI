@@ -8,33 +8,34 @@ import pandas as pd
 from tqdm import tqdm
 
 # BOARD VALUE
-EMPTY = 0
-WHITE = 1
-BLACK = -1
-WALL = 2
-BOARD_SIZE = 8
+EMPTY        : int =  0
+WHITE        : int =  1
+BLACK        : int = -1
+WALL         : int =  2
+BOARD_SIZE   : int =  8
 
 # DIRECTIONS
-NONE = 0
-LEFT = 2**0  # =1
-TOP_LEFT = 2**1  # =2
-TOP = 2**2  # =4
-TOP_RIGHT = 2**3  # =8
-RIGHT = 2**4  # =16
-BOTTOM_RIGHT = 2**5  # =32
-BOTTOM = 2**6  # =64
-BOTTOM_LEFT = 2**7  # =128
+NONE         : int = 0
+LEFT         : int = 2**0  # =1
+TOP_LEFT     : int = 2**1  # =2
+TOP          : int = 2**2  # =4
+TOP_RIGHT    : int = 2**3  # =8
+RIGHT        : int = 2**4  # =16
+BOTTOM_RIGHT : int = 2**5  # =32
+BOTTOM       : int = 2**6  # =64
+BOTTOM_LEFT  : int = 2**7  # =128
 
 # DISPLAY AXIS
-HORIZONTAL = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
-VERTICAL = ['1', '2', '3', '4', '5', '6', '7', '8']
+HORIZONTAL : list = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+VERTICAL   : list = ['1', '2', '3', '4', '5', '6', '7', '8']
 
 # OTHER
-MAX_TURNS = 60
-FIRST_TURN = BLACK
-DISPLAY = False
-SHOW_HELP = True
-SHOW_SLOW = False
+MAX_TURNS  : int  = 60
+FIRST_TURN : int  = BLACK
+DISPLAY    : bool = True
+SHOW_HELP  : bool = False
+SHOW_SLOW  : bool = False
+SWAP_COLOR : bool = True
 
 
 def change(board):
