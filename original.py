@@ -2,6 +2,7 @@ import numpy as np
 import time
 import pickle
 import random
+from tqdm import tqdm
 from pprint import pprint
 import os
 import pandas as pd
@@ -30,19 +31,32 @@ VERTICAL   : list = ['1', '2', '3', '4', '5', '6', '7', '8']
 
 # OTHER
 MAX_TURNS  : int  = 60
+SET_TIME   : int  = 3
 FIRST_TURN : int  = BLACK
-DISPLAY    : bool = True
+DISPLAY    : bool = False
 SHOW_HELP  : bool = False
 SHOW_SLOW  : bool = False
 SWAP_COLOR : bool = True
+
+POSTION_REWARD: np.ndarray = np.array([
+        [5, 1, 4, 3, 3, 3, 4, 1, 5],
+        [1, 1, 4, 2, 2, 2, 4, 1, 1],
+        [4, 4, 4, 1, 1, 1, 4, 4, 4],
+        [3, 1, 3, 1, 1, 1, 3, 1, 2],
+        [3, 1, 3, 1, 1, 1, 3, 1, 2],
+        [3, 1, 3, 1, 1, 1, 3, 1, 2],
+        [4, 4, 4, 1, 1, 1, 4, 4, 4],
+        [1, 1, 4, 2, 2, 2, 4, 1, 1],
+        [5, 1, 4, 3, 3, 3, 4, 1, 5]])
 
 # PLAYER
 class HUMAN:
 
     def __init__(self):
-        self.name    : str = "human"
-        self.wins    : int = 0
-        self.control : str = "player"
+        self.name    : str  = "human"
+        self.wins    : int  = 0
+        self.control : str  = "player"
+        self.save    : bool = False
 
     def addState(self, _) -> None:
         pass
@@ -52,7 +66,7 @@ class HUMAN:
         choice = input()
         return choice
 
-    def feedReward(self, _) -> None:
+    def feedReward(self, _, __) -> None:
         pass
 
     def reset(self) -> None:
@@ -68,37 +82,30 @@ class HUMAN:
 # COMPUTER
 class AI:
 
-    reward = np.array([
-        [5, 1, 4, 3, 3, 3, 4, 1, 5],
-        [1, 1, 4, 2, 2, 2, 4, 1, 1],
-        [4, 4, 4, 1, 1, 1, 4, 4, 4],
-        [3, 1, 3, 1, 1, 1, 3, 1, 2],
-        [3, 1, 3, 1, 1, 1, 3, 1, 2],
-        [3, 1, 3, 1, 1, 1, 3, 1, 2],
-        [4, 4, 4, 1, 1, 1, 4, 4, 4],
-        [1, 1, 4, 2, 2, 2, 4, 1, 1],
-        [5, 1, 4, 3, 3, 3, 4, 1, 5]])
+    def __init__(self, name: str, exp_rate: float =0.3, load: bool =False, save: bool =False, algorithm: str ="random", method = "normal", learn = True) -> None:
 
-    def __init__(self, name: str, exp_rate: float =0.3, load: bool =False, save: bool =False, algorithm: str ="random") -> None:
-
-        self.name         : str = name
-        self.states       : list = []
+        self.name         : str   = name
+        self.states       : list  = []
         self.lr           : float = 0.3
         self.exp_rate     : float = exp_rate
         self.decay_gamma  : float = 0.9
-        self.states_value : dict = {}
-        self.wins         : int = 0
-        self.result       : list = []
-        self.control      : str = "ai"
-        self.algorithm    : str = algorithm
-        self.color        : str = ""
-        self.save         : bool = save
-
+        self.states_value : dict  = {}
+        self.wins         : int   = 0
+        self.result       : list  = []
+        self.control      : str   = "ai"
+        self.algorithm    : str   = algorithm
+        self.color        : str   = ""
+        self.save         : bool  = save
+        self.count        : int   = 0
+        self.action       : list  = []
+        self.update       : str   = method
+        self.learn        : bool  = learn
         if load:
             self.loadPolicy()
 
     def reset(self) -> None:
         self.states = []
+        self.action = []
 
     """ evaluate the scores """
     def evaluate(self, board: np.ndarray) -> int:
@@ -107,9 +114,9 @@ class AI:
         for i in range(1, BOARD_SIZE-1):
             for j in range(1, BOARD_SIZE-1):
                 if board[i, j] == self.color:
-                    total += self.lr * self.reward[i, j]
+                    total += self.lr * POSTION_REWARD[i-1, j-1]
                 elif board[i, j] == -self.color:
-                    total -= self.lr * self.reward[i, j]
+                    total -= self.lr * POSTION_REWARD[i-1, j-1]
                 else:
                     continue
 
@@ -119,19 +126,49 @@ class AI:
     def addState(self, state: np.ndarray) -> None:
         if self.algorithm == "q-learn":
             self.states.append(np.copy(state))
+    
+    """ add selected action """
+    def addAction(self, action: tuple[int,int]) -> None:
+        if self.algorithm == "q-learn":
+            self.action.append(action)
 
     """ Update Computer """
     def feedReward(self, reward: int, count: int) -> None:
 
-        for st in reversed(self.states):
-            key = str(st.flatten().tolist())
+        for i,st in enumerate(reversed(self.states)):
+            #key = str(st.flatten().tolist())
+            x,y = self.action[-(i+1)]
+            key = f"{x},{y}"
             if key not in self.states_value:
-                self.states_value[key] = 0.0
+               self.states_value[key] = 0.0
+            if x is not None:
+                position_reward = POSTION_REWARD[x-1,y-1]
+            else:
+                position_reward = 0.5
 
-            self.states_value[key] += self.lr * \
-                (self.decay_gamma * reward - self.states_value[key])
+            board_reward = self.evaluate(st)
+
+            # NORMAL FORMULA
+            if self.update == "normal":
+                additional = 0
+            
+            # POSITIONAL FORMULA
+            if self.update == "pos":
+                additional = 0.01 * position_reward
+
+
+            # POSITIONAL + BOARD STATUS FORMULA 
+            if self.update == "pos+":
+                #print(reward,(0.3 * position_reward + 0.1 * board_reward))
+                additional = 0.3 * (position_reward + board_reward)
+
+            if self.learn:
+                self.states_value[key] += self.lr * (self.decay_gamma * (reward) - self.states_value[key]) + additional
+
             reward = self.states_value[key]
             self.result.append([self.evaluate(st), reward, count])
+        
+        #time.sleep(3)
 
     """ Save learned data """
     def savePolicy(self) -> None:
@@ -144,16 +181,20 @@ class AI:
     """ Load learned data """
     def loadPolicy(self) -> None:
 
-        if self.algorithm == "q-learn" and os.path.isfile('policy'+self.name):
+        if self.algorithm == "q-learn" and os.path.isfile('policy_'+self.name):
+            print("LOADING",'policy_'+self.name)
             fr = open('policy_'+self.name, 'rb')
             self.states_value = pickle.load(fr)
+            print(len(self.states_value.values()))
             fr.close()
 
 
 # REVERSI GAME
 class REVERSI:
 
-    def __init__(self, p1: AI or HUMAN, p2: AI or HUMAN) -> None:
+    def __init__(self, name: str, p1: AI or HUMAN, p2: AI or HUMAN) -> None:
+
+        self.name = name
 
         # Color -> Player
         self.players = {
@@ -164,6 +205,9 @@ class REVERSI:
         # Players
         self.p1 = p1
         self.p2 = p2
+        
+        self.p1.wins = 0
+        self.p2.wins = 0
 
         self.reset()
 
@@ -465,9 +509,11 @@ class REVERSI:
     """ Choice of Player """
     def choice(self, choices: list, player: AI or HUMAN, board: np.ndarray) -> tuple[int or None,int or None] :
 
+        action = choices[0]
         if (choices[0][0], choices[0][1]) == (None, None):
             if DISPLAY:
                 print("PASS")
+            player.addAction([None,None])
             return choices[0]
 
         if DISPLAY:
@@ -482,6 +528,28 @@ class REVERSI:
                 print("METHOD: RANDOM")
 
         if player.algorithm == "q-learn":
+
+            # Selects choice previous comparing currentboard and nextboard
+            value_max = -999.0
+
+            count = 0
+            values = ""
+            for x, y in choices:
+                #next_board = self.flip(board.copy(), x, y)
+                #key = str(next_board.flatten().tolist())
+                key = f"{x},{y}"
+                if key in player.states_value:
+                    value = player.states_value[key]
+                    count += 1
+                else:
+                    player.states_value[key] = 0.0
+                    value = 0.0
+
+                if value >= value_max:
+                    value_max = value
+                    values+=f"->{x},{y} "
+                    action = [x, y]
+
             # Selects random choice if exploration rat is higher¥
             if np.random.uniform(0, 1) <= player.exp_rate:
                 select = random.randint(0, len(choices)-1)
@@ -489,50 +557,40 @@ class REVERSI:
 
                 if DISPLAY:
                     print("METHOD: RANDOM")
+            
+            elif DISPLAY:
+                print("MATCHED ENVIRONMENT:", count)
+                print("METHOD: Q-RL")
 
-            # Selects choice previous comparing currentboard and nextboard
-            else:
-                value_max = -999.0
-
-                for x, y in choices:
-                    next_board = self.flip(board.copy(), x, y)
-                    key = str(next_board.flatten().tolist())
-
-                    if key in player.states_value:
-                        value = player.states_value[key]
-                    else:
-                        player.states_value[key] = 0.0
-                        value = 0.0
-
-                    if value >= value_max:
-                        value_max = value
-                        action = [x, y]
-
-                if DISPLAY:
-
-                    print("METHOD: Q-RL")
-                    print("VALUE:", value_max)
+            if DISPLAY:
+                print("VALUE:", value_max)
+                print("CHANGED:",values)
 
         if DISPLAY:
 
             print(f"SELECTS: {action}, (INDEX: {choices.index(action) + 1})")
 
+        player.addAction(action)
         return action
 
     """ Play Reversi """
     def start(self, iter: int=1) -> None:
 
-        p1, p2 = 0, 0
+        p1, p2, tie = 0, 0, 0
         report = ""
+        result = []
+        bar = tqdm(total=iter)
         for i in range(1, iter+1):
 
-            if i % iter%(iter/10) == 0:
-                report += f'At{i}, P1: {self.p1.wins}({self.p1.wins-p1}), P2: {self.p2.wins}({self.p2.wins-p2}), TIE: {i-1-self.p1.wins-self.p2.wins}\n'
-                p1, p2 = self.p1.wins, self.p2.wins
+            if (i - 1) % iter%(iter/10) == 0:
+                report += f'At{i-1}, {self.p1.name}: {self.p1.wins}({self.p1.wins-p1}), {self.p2.name}: {self.p2.wins}({self.p2.wins-p2}), TIE: {i-1-self.p1.wins-self.p2.wins}\n'
+                if not DISPLAY:
+                    s_rep = f'At{i-1}, {self.p1.name}: {self.p1.wins}({self.p1.wins-p1}), {self.p2.name}: {self.p2.wins}({self.p2.wins-p2}), TIE: {i-1-self.p1.wins-self.p2.wins}({i-1-self.p1.wins-self.p2.wins-tie})'
+                    print(s_rep)
+                p1, p2, tie = self.p1.wins, self.p2.wins, i-1-self.p1.wins-self.p2.wins
             while True:
 
                 self.display(i,report)
-
                 if DISPLAY:
 
                     if self.color == BLACK:
@@ -588,14 +646,18 @@ class REVERSI:
 
                 #time.sleep(0.05)
                 if SHOW_SLOW:
-                    time.sleep(0.5)
+                    time.sleep(SET_TIME)
 
             count_black, count_white = self.count_all()
+            
 
             if DISPLAY:
                 print("\nX:", count_black, "O:", count_white)
 
             diff = (count_black-count_white)/(count_black+count_white)
+            
+            self.players[BLACK].count = count_black
+            self.players[WHITE].count = count_white
             if count_black > count_white:
 
                 if DISPLAY:
@@ -618,48 +680,120 @@ class REVERSI:
                 if DISPLAY:
                     print('Tie self\n')
 
-                self.players[BLACK].feedReward(1, diff)
-                self.players[WHITE].feedReward(1, diff)
+                self.players[BLACK].feedReward(2, diff)
+                self.players[WHITE].feedReward(2, diff)
 
             self.reset()
 
+            result.append([i, self.p1.wins, self.p2.wins, self.p1.count, self.p2.count])
+            bar.update(1)
+
+
         self.p1.savePolicy()
         self.p2.savePolicy()
+
+        field = ["iter","p1_win","p2_win","p1_count","p2_count"]
+        df = pd.DataFrame(columns=field)
+        if self.p1.save and self.p2.save:
+            print("\nSAVING RESULTS TO CSV")
+            for i in range(len(field)):
+                df[field[i]] = [ item[i] for item in result ]
+            df.to_csv(self.name+"_RESULT.csv",index=False)
 
 
 def main():
 
     # TRAIN
+    
+    ### Normal method with exploration rate 0.1
     p1 = AI(
-        name="p1",
-        exp_rate=0.3,
+        name="Normal_0.1",
+        exp_rate=0.1,
         algorithm="q-learn",
         save=True,
-        load=False
+        load=True
     )
     p2 = AI(
-        name="p2",
+        name="Normal_0.3",
         exp_rate=0.3,
         algorithm="q-learn",
         save=True,
-        load=False
+        load=True
     )
+    p3 = AI(
+        name="Pos_0.1",
+        exp_rate=0.1,
+        algorithm="q-learn",
+        save=True,
+        load=True,
+        method="pos"
+    )
+    p4 = AI(
+        name="Pos_0.3",
+        exp_rate=0.3,
+        algorithm="q-learn",
+        save=True,
+        load=True,
+        method="pos"
+    )
+    p5 = AI(
+        name="Pos+_0.1",
+        exp_rate=0.1,
+        algorithm="q-learn",
+        save=True,
+        load=True,
+        method="pos+"
+    )
+    p6 = AI(
+        name="Pos+_0.3",
+        exp_rate=0.3,
+        algorithm="q-learn",
+        save=True,
+        load=True,
+        method="pos+"
+    )     
+    time.sleep(3)
 
+    ### TRAINING 
+    player1, player2 = p1,p2  # Normal 0.1 vs Normal 0.3
+    #player1, player2 = p3,p4 # Position 0.1 vs Position 0.3
+    #player1, player2 = p5,p6 # Position + Board 0.1 vs Postion + Board 0.3
+
+    
     # TRAIN
-    train = REVERSI(p1, p2)
+    print("=== START TRAIN ===")
+    train = REVERSI("train2", player1, player2)
     train.start(100000)
+    print("===================\n")
 
     # TEST
+    global DISPLAY,SHOW_SLOW,SHOW_HELP
+    DISPLAY,SHOW_SLOW = False, False
     random_player = AI(name="random")
-    test1 = REVERSI(p1, random_player)
-    test1.play(500)
 
-    test2 = REVERSI(p2, random_player)
-    test2.play(500)
-    
+    print("=== TEST P1 TRAIN ===")
+    player1.save = False
+    player1.exp_rate = 0
+    player1.learn = False
+
+    test1 = REVERSI("test11", player1, random_player)
+    test1.start(100)
+    print("=====================\n")
+
+
+    print("=== TEST P2 TRAIN ===")
+    player2.save = False
+    player2.exp_rate = 0
+    player2.learn = False
+
+    test2 = REVERSI("test21", player2, random_player)
+    test2.start(100)
+    print("=====================\n")
+
     # PLAY
+    DISPLAY,SHOW_SLOW,SHOW_HELP = True, True, True
     player = HUMAN()
-    play = REVERSI(player,p2)
+    play = REVERSI("play",player, player1)
     #play.start(1)
 
 
