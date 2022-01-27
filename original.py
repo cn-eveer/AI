@@ -3,7 +3,6 @@ import time
 import pickle
 import random
 from tqdm import tqdm
-from pprint import pprint
 import os
 import pandas as pd
 
@@ -751,7 +750,8 @@ def main():
         save=True,
         load=True,
         method="pos+"
-    )     
+    )
+    p7 = AI(name="rand")
     time.sleep(3)
 
     ### TRAINING 
@@ -799,3 +799,63 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+"""
+# OTHELLO PROGRAM
+
+## INTRO
+
+This programs contains of 
+- Reinforcement Learning of Othello
+- Normal play between Player and Computer
+
+### REINFORCEMENT LEARNING
+
+The learning method used is Q-RL which have 3 different update methods.
+- Normal Update method (p1,p2)
+- update method based on positions (p3,p4)
+- update method base on positions and board status (p5,p6)
+
+AI stores the value of position (x,y) and selects the choice with higher
+score. After each game, the value of position gets update based on the resuls.
+
+AI has exploration rate (exp_rate) during training which allows the choice to
+be made random.
+
+#### TRAINING
+
+AI is trained between 2 computers and can be changed from p1~p7. Game iteration 
+around 50,000 ~ 100,000 is tested to give decent result on test. No. of 
+iteration can be change for function REVERSI.play()
+
+### TESTING
+
+AI is tested against the random selecting opponent for 100 times. At the testing phase,
+exploration rate is 0 so the AI completely selects based on the score trained. It does
+not update the score during testing period.
+
+After training and testing, result of each iteration is save to csv and scores for
+each position per AI is saved.
+
+## HOW TO EXECUTE
+
+- install required libraries
+```
+pip install numpy pandas tqdm
+```
+
+- run the program
+```
+python original.py
+```
+
+### RESULTS
+
+- AI with less exploration shows better performance
+- AI performance is in order of Normal < Position < Position + Board
+- Although, reinforce computer can win agains random selecting opponet,
+  it cannot defeat it totally.
+
+
+"""
